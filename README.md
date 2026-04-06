@@ -4,12 +4,12 @@
   <h2 align="center">Sudoku Bot</h2>
 
   <p align="center">
-    Sudoku bot using AI for digit recognition and hybrid rule/brute-force solving.
+    A fast Sudoku bot with a GUI, CNN digit recognition, and an optimized bitmask solver.
     <br />
-    Automatically reads and fills puzzles from screen captures.
+    Reads puzzles from your screen and fills them in automatically.
   </p>
 
-  ## [![Sudoku Solver Preview][product-preview]](https://github.com/dig0w/Sudoku-Bot/blob/main/preview.gif)
+  ## [![Sudoku Solver Preview][product-preview]](https://github.com/lem-sleep/Sudoku-Bot/blob/main/preview.gif)
 </div>
 
 <!-- Index -->
@@ -23,11 +23,9 @@
         <li><a href="#installation">Installation</a></li>
       </ul>
     </li>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-    </li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#about-the-project">About The Project</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how-it-works">How It Works</a></li>
     <li><a href="#license">License</a></li>
   </ol>
 </details>
@@ -39,7 +37,6 @@
 - Python 3.8+
 - Windows, macOS, or Linux
 - A visible Sudoku board on screen (supports sudoku.com, websudoku, etc.)
-
 
 ### Installation
 
@@ -53,40 +50,40 @@
   python main.py
   ```
 
-3. Press 'S' whenever you want him to start solving
+3. A small GUI window will appear. Switch to your Sudoku tab and press **S** to solve. Press **S** again for the next puzzle — no need to restart.
 
+4. Press **Q** to quit.
 
 <p align="right">(<a href="#Sudoku-Bot">back to top</a>)</p>
 
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-This bot takes a screenshot of your screen and detects the largest square, assumed to be the Sudoku board.
-Once the board is located, it extracts all 81 cells (9x9) and uses a custom CNN to recognize the digits.
-Using basic Sudoku rules (and brute-force when necessary), it solves the puzzle, then automatically fills in the answers by simulating mouse clicks and key presses.
+I built this as a remake of [dig0w's Sudoku-Bot](https://github.com/dig0w/Sudoku-Bot), rewriting the entry point and solver from scratch while keeping the CNN and board reader intact.
 
-On average, the bot can solve a Sudoku puzzle in ~13 seconds.
-
-The CNN was trained from scratch on a custom dataset built from screenshots of multiple Sudoku games, allowing it to recognize digits across different fonts and styles.
+The original bot solved puzzles in ~13 seconds using rule-based constraint propagation with a recursive brute-force fallback, and exited after each solve. I replaced the solver with a bitmask backtracking algorithm with MRV heuristic that solves any 9x9 puzzle in milliseconds, added a persistent GUI so you can solve back-to-back without restarting, and added a speed slider to control how fast it fills in the answers.
 
 <p align="right">(<a href="#Sudoku-Bot">back to top</a>)</p>
 
-<!-- ROADMAP -->
-## Roadmap
+<!-- FEATURES -->
+## Features
 
-- [x] CNN digit recognition
-- [x] Rule-based + brute-force solver
-- [x] Auto-input
-- [x] Enhanced preprocessing for low-contrast boards
-
-See the [open issues](https://github.com/dig0w/sudoku-bot/issues) for a full list of proposed features (and known issues).
+- **Persistent GUI** — small always-on-top window showing status (Ready / Solving / Filling / Error / Solved). No more restarting between puzzles.
+- **Speed slider** — drag to control how fast the bot fills in cells, from slow and visible to near-instant.
+- **Fast solver** — bitmask constraint tracking + backtracking with MRV heuristic. Solves puzzles in under a millisecond.
+- **CNN digit recognition** — custom-trained CNN recognizes digits across different fonts and Sudoku sites. Model loads once at startup for faster repeated solves.
+- **Hotkey controls** — press S to solve, Q to quit. Works globally so you can stay on your Sudoku tab.
 
 <p align="right">(<a href="#Sudoku-Bot">back to top</a>)</p>
 
-<!-- CONTRIBUTING -->
-## Contributing
+<!-- HOW IT WORKS -->
+## How It Works
 
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+1. Takes a screenshot and detects the largest quadrilateral (the Sudoku board)
+2. Warps the board into a clean 450x450 image and splits it into 81 cells
+3. Runs each cell through a CNN to recognize the digit (or 0 for empty)
+4. Solves the puzzle using bitmask backtracking with MRV heuristic
+5. Fills in the answers by simulating mouse clicks and key presses at the detected board position
 
 <p align="right">(<a href="#Sudoku-Bot">back to top</a>)</p>
 
@@ -97,7 +94,8 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 <p align="right">(<a href="#Sudoku-Bot">back to top</a>)</p>
 
+**Project Link:** [github.com/lem-sleep/Sudoku-Bot](https://github.com/lem-sleep/Sudoku-Bot)
 
-**🔗 Project Link:** [github.com/dig0w/sudoku-bot](https://github.com/dig0w/sudoku-bot)
+**Original Project:** [github.com/dig0w/Sudoku-Bot](https://github.com/dig0w/Sudoku-Bot)
 
 [product-preview]: ./preview.gif

@@ -192,12 +192,9 @@ class SudokuBotGUI:
                 if not self.running:
                     break
 
-                # Wait for the menu to close and new puzzle to fully load
+                # Wait for the new puzzle to load
                 self.root.after(0, lambda: self.set_status("Waiting for puzzle...", "#f59e0b"))
-                time.sleep(2)
-                if not self.wait_for_board():
-                    self.root.after(0, lambda: self.set_status("Board didn't load!", "#ef4444"))
-                    break
+                time.sleep(4)
 
         except Exception as e:
             print(f"Loop error: {e}")

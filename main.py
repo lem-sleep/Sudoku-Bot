@@ -31,19 +31,32 @@ EXTREME_REFS = [
 ]
 
 
-def locate_and_click(ref_paths, confidence=0.8, retries=10, delay=0.5):
-    """Try to find and click a button using multiple reference images."""
+def locate_and_click(ref_paths, confidence=0.9, retries=10, delay=0.5, pick_lowest=False):
+    """Try to find and click a button using multiple reference images.
+    If pick_lowest=True, find ALL matches and click the one lowest on screen.
+    """
     for attempt in range(retries):
+        best = None  # (x, y) with highest y value
         for ref in ref_paths:
             if not os.path.exists(ref):
                 continue
             try:
-                loc = pyautogui.locateCenterOnScreen(ref, confidence=confidence)
-                if loc:
-                    pyautogui.click(loc)
-                    return True
+                if pick_lowest:
+                    matches = list(pyautogui.locateAllOnScreen(ref, confidence=confidence))
+                    for match in matches:
+                        center = pyautogui.center(match)
+                        if best is None or center.y > best.y:
+                            best = center
+                else:
+                    loc = pyautogui.locateCenterOnScreen(ref, confidence=confidence)
+                    if loc:
+                        pyautogui.click(loc)
+                        return True
             except pyautogui.ImageNotFoundException:
                 continue
+        if best:
+            pyautogui.click(best)
+            return True
         time.sleep(delay)
     return False
 
@@ -163,7 +176,7 @@ class SudokuBotGUI:
                 pyautogui.PAUSE = 0.01
                 time.sleep(1)
 
-                if not locate_and_click(NEW_GAME_REFS, confidence=0.7):
+                if not locate_and_click(NEW_GAME_REFS, confidence=0.9):
                     self.root.after(0, lambda: self.set_status("Can't find New Game!", "#ef4444"))
                     break
 
@@ -174,16 +187,18 @@ class SudokuBotGUI:
                 self.root.after(0, lambda: self.set_status("Clicking Extreme...", "#a855f7"))
                 time.sleep(0.5)
 
-                if not locate_and_click(EXTREME_REFS, confidence=0.7):
+                if not locate_and_click(EXTREME_REFS, confidence=0.9, pick_lowest=True):
                     self.root.after(0, lambda: self.set_status("Can't find Extreme!", "#ef4444"))
                     break
 
                 if not self.running:
                     break
 
-                # Wait for new puzzle to load
+                # Wait until the board is visible on screen
                 self.root.after(0, lambda: self.set_status("Waiting for puzzle...", "#f59e0b"))
-                time.sleep(3)
+                if not self.wait_for_board():
+                    self.root.after(0, lambda: self.set_status("Board didn't load!", "#ef4444"))
+                    break
 
         except Exception as e:
             print(f"Loop error: {e}")
@@ -195,6 +210,17 @@ class SudokuBotGUI:
             self.root.after(0, lambda: self.set_status(
                 f"Stopped ({n} solved)  -  Press S", "#22c55e"
             ))
+
+    def wait_for_board(self, timeout=10, interval=0.3):
+        """Poll screenshots until a sudoku board is detected or timeout."""
+        deadline = time.time() + timeout
+        while time.time() < deadline and self.running:
+            img = pyautogui.screenshot()
+            _, thresh = readBoard.loadImage(img)
+            if readBoard.findBoard(thresh) is not None:
+                return True
+            time.sleep(interval)
+        return False
 
     def run_solver(self):
         """Run a single solve. Returns True if solved successfully."""

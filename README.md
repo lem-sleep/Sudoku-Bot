@@ -123,6 +123,3 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Project Link:** [github.com/lem-sleep/Sudoku-Bot](https://github.com/lem-sleep/Sudoku-Bot)
 
-**Original Project:** [github.com/dig0w/Sudoku-Bot](https://github.com/dig0w/Sudoku-Bot)
-
-[product-preview]: ./preview.gif

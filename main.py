@@ -1,6 +1,7 @@
 # Install Requirements
 # pip install -r requirements.txt
 
+import os
 import numpy as np
 from PIL import Image
 import pyautogui
@@ -12,6 +13,39 @@ import tkinter as tk
 import readBoard
 import sudoku
 import solver_fast
+
+# Directory where reference images live
+REF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "references")
+
+# Reference images for button detection (multiple variants for reliability)
+NEW_GAME_REFS = [
+    os.path.join(REF_DIR, f) for f in [
+        "new_game_btn.png", "new_game_btn_1.png",
+        "new_game_btn_2.png", "new_game_btn_3.png"
+    ]
+]
+EXTREME_REFS = [
+    os.path.join(REF_DIR, f) for f in [
+        "extreme_btn.png", "extreme_btn_1.png", "extreme_btn_2.png"
+    ]
+]
+
+
+def locate_and_click(ref_paths, confidence=0.8, retries=10, delay=0.5):
+    """Try to find and click a button using multiple reference images."""
+    for attempt in range(retries):
+        for ref in ref_paths:
+            if not os.path.exists(ref):
+                continue
+            try:
+                loc = pyautogui.locateCenterOnScreen(ref, confidence=confidence)
+                if loc:
+                    pyautogui.click(loc)
+                    return True
+            except pyautogui.ImageNotFoundException:
+                continue
+        time.sleep(delay)
+    return False
 
 
 class SudokuBotGUI:
@@ -55,7 +89,7 @@ class SudokuBotGUI:
         self.speed_var.trace_add("write", self._update_speed_label)
 
         self.info_label = tk.Label(
-            self.root, text="Press S to solve  |  Press Q to quit",
+            self.root, text="Press S to start/stop  |  Press Q to quit",
             font=("Consolas", 10), fg="#888888", bg="#1e1e1e"
         )
         self.info_label.pack(side=tk.BOTTOM, pady=8)
@@ -63,6 +97,7 @@ class SudokuBotGUI:
         self.root.configure(bg="#1e1e1e")
 
         self.solving = False
+        self.running = False  # auto-loop flag
 
         # Load CNN model once at startup
         self.set_status("Loading model...", "#f59e0b")
@@ -88,20 +123,81 @@ class SudokuBotGUI:
         self.root.update_idletasks()
 
     def on_s_pressed(self, event=None):
+        if self.running:
+            # Stop after current solve finishes
+            self.running = False
+            self.root.after(0, lambda: self.set_status("Stopping...", "#f59e0b"))
+            return
         if self.solving:
             return
+        self.running = True
         self.solving = True
-        thread = threading.Thread(target=self.run_solver, daemon=True)
+        thread = threading.Thread(target=self.run_loop, daemon=True)
         thread.start()
 
     def on_q_pressed(self, event=None):
+        self.running = False
         self.on_close()
 
     def on_close(self):
+        self.running = False
         keyboard.unhook_all()
         self.root.destroy()
 
+    def run_loop(self):
+        """Auto-loop: solve → New Game → Extreme → wait → repeat."""
+        solve_count = 0
+        try:
+            while self.running:
+                success = self.run_solver()
+                solve_count += 1
+
+                if not self.running:
+                    break
+
+                if not success:
+                    break
+
+                # Click "New Game"
+                self.root.after(0, lambda: self.set_status("Clicking New Game...", "#a855f7"))
+                pyautogui.PAUSE = 0.01
+                time.sleep(1)
+
+                if not locate_and_click(NEW_GAME_REFS, confidence=0.7):
+                    self.root.after(0, lambda: self.set_status("Can't find New Game!", "#ef4444"))
+                    break
+
+                if not self.running:
+                    break
+
+                # Click "Extreme"
+                self.root.after(0, lambda: self.set_status("Clicking Extreme...", "#a855f7"))
+                time.sleep(0.5)
+
+                if not locate_and_click(EXTREME_REFS, confidence=0.7):
+                    self.root.after(0, lambda: self.set_status("Can't find Extreme!", "#ef4444"))
+                    break
+
+                if not self.running:
+                    break
+
+                # Wait for new puzzle to load
+                self.root.after(0, lambda: self.set_status("Waiting for puzzle...", "#f59e0b"))
+                time.sleep(3)
+
+        except Exception as e:
+            print(f"Loop error: {e}")
+            self.root.after(0, lambda: self.set_status("Error!", "#ef4444"))
+        finally:
+            self.running = False
+            self.solving = False
+            n = solve_count
+            self.root.after(0, lambda: self.set_status(
+                f"Stopped ({n} solved)  -  Press S", "#22c55e"
+            ))
+
     def run_solver(self):
+        """Run a single solve. Returns True if solved successfully."""
         try:
             self.root.after(0, lambda: self.set_status("Solving...", "#f59e0b"))
 
@@ -113,8 +209,7 @@ class SudokuBotGUI:
 
             if boardContour is None:
                 self.root.after(0, lambda: self.set_status("No board found!", "#ef4444"))
-                self.solving = False
-                return
+                return False
 
             pts = boardContour.reshape(4, 2)
             boardCorner = (int(pts[0, 0]), int(pts[0, 1]))
@@ -127,7 +222,6 @@ class SudokuBotGUI:
             cells = readBoard.splitCells(boardImg)
             processedCells = readBoard.preprocessCells(cells)
 
-            # Reuse pre-loaded model
             board = readBoard.readBoard(self.model, processedCells)
 
             read_time = time.time()
@@ -135,7 +229,6 @@ class SudokuBotGUI:
             board = sudoku.refactorBoard(board)
             print(f"\nBoard: {board}")
 
-            # Use the fast solver
             solvedBoard, solvedEmpties = solver_fast.solve(board)
 
             solve_time = time.time()
@@ -144,7 +237,6 @@ class SudokuBotGUI:
             isSolved = all(all(cell != 0 for cell in row) for row in solvedBoard)
             if isSolved:
                 self.root.after(0, lambda: self.set_status("Filling board...", "#3b82f6"))
-                # Map slider (1-100) to pause: 1%=0.15s (slow), 100%=0.005s (instant)
                 speed = self.speed_var.get()
                 pyautogui.PAUSE = 0.15 - (speed - 1) * (0.145 / 99)
                 sudoku.FillBoard(solvedEmpties, boardCorner, cellSize)
@@ -158,14 +250,15 @@ class SudokuBotGUI:
             if isSolved:
                 msg = f"Solved in {end_time - start_time:.2f}s"
                 self.root.after(0, lambda: self.set_status(msg, "#22c55e"))
+                return True
             else:
                 self.root.after(0, lambda: self.set_status("Could not solve!", "#ef4444"))
+                return False
 
         except Exception as e:
             print(f"Error: {e}")
             self.root.after(0, lambda: self.set_status("Error!", "#ef4444"))
-        finally:
-            self.solving = False
+            return False
 
 
 if __name__ == "__main__":

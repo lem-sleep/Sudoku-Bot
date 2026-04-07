@@ -65,7 +65,7 @@ class SudokuBotGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Sudoku Bot")
-        self.root.geometry("320x240")
+        self.root.geometry("320x270")
         self.root.attributes("-topmost", True)
         self.root.resizable(False, False)
 
@@ -101,8 +101,32 @@ class SudokuBotGUI:
         self.speed_label.pack(side=tk.RIGHT)
         self.speed_var.trace_add("write", self._update_speed_label)
 
+        # Auto Replay toggle
+        toggle_frame = tk.Frame(self.root, bg="#1e1e1e")
+        toggle_frame.pack(fill=tk.X, padx=16, pady=(0, 4))
+
+        tk.Label(
+            toggle_frame, text="Auto Replay", font=("Consolas", 9),
+            fg="#888888", bg="#1e1e1e"
+        ).pack(side=tk.LEFT)
+
+        self.auto_replay_var = tk.BooleanVar(value=False)
+        self.auto_replay_cb = tk.Checkbutton(
+            toggle_frame, variable=self.auto_replay_var,
+            bg="#1e1e1e", activebackground="#1e1e1e",
+            selectcolor="#333333", relief=tk.FLAT,
+            command=self._on_toggle_auto_replay
+        )
+        self.auto_replay_cb.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.auto_replay_label = tk.Label(
+            toggle_frame, text="OFF", font=("Consolas", 9, "bold"),
+            fg="#ef4444", bg="#1e1e1e"
+        )
+        self.auto_replay_label.pack(side=tk.LEFT, padx=(4, 0))
+
         self.info_label = tk.Label(
-            self.root, text="Press S to start/stop  |  Press Q to quit",
+            self.root, text="Press S to solve  |  Press Q to quit",
             font=("Consolas", 10), fg="#888888", bg="#1e1e1e"
         )
         self.info_label.pack(side=tk.BOTTOM, pady=8)
@@ -110,7 +134,7 @@ class SudokuBotGUI:
         self.root.configure(bg="#1e1e1e")
 
         self.solving = False
-        self.running = False  # auto-loop flag
+        self.running = False  # True while auto-loop is active
 
         # Load CNN model once at startup
         self.set_status("Loading model...", "#f59e0b")
@@ -131,21 +155,34 @@ class SudokuBotGUI:
     def _update_speed_label(self, *args):
         self.speed_label.config(text=f"{self.speed_var.get()}%")
 
+    def _on_toggle_auto_replay(self):
+        if self.auto_replay_var.get():
+            self.auto_replay_label.config(text="ON", fg="#22c55e")
+        else:
+            self.auto_replay_label.config(text="OFF", fg="#ef4444")
+            # If currently looping, signal stop
+            if self.running:
+                self.running = False
+
     def set_status(self, text, color):
         self.status_label.config(text=text, fg=color)
         self.root.update_idletasks()
 
     def on_s_pressed(self, event=None):
         if self.running:
-            # Stop after current solve finishes
+            # Stop the auto-loop
             self.running = False
             self.root.after(0, lambda: self.set_status("Stopping...", "#f59e0b"))
             return
         if self.solving:
             return
-        self.running = True
         self.solving = True
-        thread = threading.Thread(target=self.run_loop, daemon=True)
+
+        if self.auto_replay_var.get():
+            self.running = True
+            thread = threading.Thread(target=self.run_loop, daemon=True)
+        else:
+            thread = threading.Thread(target=self.run_single, daemon=True)
         thread.start()
 
     def on_q_pressed(self, event=None):
@@ -157,8 +194,17 @@ class SudokuBotGUI:
         keyboard.unhook_all()
         self.root.destroy()
 
+    def run_single(self):
+        """Solve once then stop."""
+        try:
+            success = self.run_solver()
+            if not success:
+                self.root.after(0, lambda: self.set_status("Ready  -  Press S", "#22c55e"))
+        finally:
+            self.solving = False
+
     def run_loop(self):
-        """Auto-loop: solve → New Game → Extreme → wait → repeat."""
+        """Auto-loop: solve -> New Game -> Extreme -> wait -> repeat."""
         solve_count = 0
         try:
             while self.running:
@@ -206,17 +252,6 @@ class SudokuBotGUI:
             self.root.after(0, lambda: self.set_status(
                 f"Stopped ({n} solved)  -  Press S", "#22c55e"
             ))
-
-    def wait_for_board(self, timeout=10, interval=0.3):
-        """Poll screenshots until a sudoku board is detected or timeout."""
-        deadline = time.time() + timeout
-        while time.time() < deadline and self.running:
-            img = pyautogui.screenshot()
-            _, thresh = readBoard.loadImage(img)
-            if readBoard.findBoard(thresh) is not None:
-                return True
-            time.sleep(interval)
-        return False
 
     def run_solver(self):
         """Run a single solve. Returns True if solved successfully."""

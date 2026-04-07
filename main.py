@@ -163,13 +163,11 @@ class SudokuBotGUI:
         try:
             while self.running:
                 success = self.run_solver()
+
+                if not success or not self.running:
+                    break
+
                 solve_count += 1
-
-                if not self.running:
-                    break
-
-                if not success:
-                    break
 
                 # Click "New Game"
                 self.root.after(0, lambda: self.set_status("Clicking New Game...", "#a855f7"))
@@ -194,8 +192,9 @@ class SudokuBotGUI:
                 if not self.running:
                     break
 
-                # Wait until the board is visible on screen
+                # Wait for the menu to close and new puzzle to fully load
                 self.root.after(0, lambda: self.set_status("Waiting for puzzle...", "#f59e0b"))
+                time.sleep(2)
                 if not self.wait_for_board():
                     self.root.after(0, lambda: self.set_status("Board didn't load!", "#ef4444"))
                     break
